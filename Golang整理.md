@@ -1908,3 +1908,350 @@ func main() {
 
 
 ```
+
+```go
+Select超时处理
+
+func main() {
+	ch := make(chan int)
+	quit := make(chan bool)
+	go func() { // 子go 程获取数据
+		for {
+			select {
+			case num := <-ch:
+				fmt.Println("num = ", num)
+			case <-time.After(3 * time.Second): //for循环中的每次都会重置
+				quit <- true
+				goto label //跳转到label处， 此处可以直接跳出for循环
+				// return 直接跳出for
+				// runtime.Goexit() 跳出子go程
+			}
+		}
+	label: //声明label， 必须在函数内部声明，不能在main中声明。
+	}()
+	for i := 0; i < 2; i++ {
+		ch <- i
+		time.Sleep(time.Second * 2)
+	}
+	<-quit // 主go程，阻塞等待 子go程通知，退出
+	fmt.Println("finish!!!")
+}
+
+```
+
+```go
+死锁
+
+1. 出channel 早于 写入channel
+2. 声明之前使用channel
+3. 多channel交叉死锁
+
+func main() {
+	ch1 := make(chan int)
+	ch2 := make(chan int)
+	go func() { // 子
+		// 读ch1操作
+		for {
+			select {
+			case num := <-ch1:
+				ch2 <- num
+			}
+		}
+	}()
+	for {
+		// 读ch2操作，往ch1中写
+		select {
+		case num := <-ch2:
+			ch1 <- num
+		}
+	}
+}
+
+```
+
+```go
+互斥锁
+
+// 使用 “锁” 完成同步 —— 互斥锁
+var mutex sync.Mutex // 创建一个互斥量， 新建的互斥锁状态为 0，0表示未加锁。 锁只有一把。
+
+func printer(str string) {
+	mutex.Lock() // 访问共享数据之前，加锁
+	for _, ch := range str {
+		fmt.Printf("%c", ch)
+		time.Sleep(time.Millisecond * 300)
+	}
+	mutex.Unlock() // 共享数据访问结束，解锁
+}
+
+func person1() { 	printer("hello")} // 先
+func person2() { printer("world")}  // 后
+
+func main() {
+	go person1()
+	go person2()
+	for {
+	}
+}
+
+使用channel写一个互斥锁
+
+var ch = make(chan int)
+
+func printer(str string)  {
+	for _, ss := range str {
+		fmt.Printf("%c", ss)
+		time.Sleep(time.Millisecond * 300)
+	}
+}
+
+func person1()  {				// 先
+	printer("hello")
+	ch <- 98
+}
+
+func person2()  {				// 后
+	<- ch
+	printer("world")
+}
+
+func main()  {
+	go person1()
+	go person2()
+	for {
+		;
+	}
+}
+
+```
+
+```go
+读写锁
+
+
+var rwMutex1 sync.RWMutex // 锁只有一把， 2 个属性 r w
+var value int // 定义全局变量，模拟共享数据
+
+func readGo05(idx int) { //读的时候概率较大
+	for {
+		rwMutex1.RLock() // 以读模式加锁
+		num := value
+		fmt.Printf("----%dth 读 go程，读出：%d\n", idx, num)
+		rwMutex1.RUnlock() // 以读模式解锁
+		time.Sleep(time.Second)
+	}
+}
+func writeGo05(idx int) { //独占锁
+	for {
+		// 生成随机数
+		num := rand.Intn(1000)
+		rwMutex1.Lock() // 以写模式加锁
+		value = num
+		fmt.Printf("%dth 写go程，写入：%d\n", idx, num)
+		time.Sleep(time.Millisecond * 300) // 放大实验现象
+		rwMutex1.Unlock()
+	}
+}
+func main() {
+	// 播种随机数种子
+	rand.Seed(time.Now().UnixNano())
+
+	for i := 0; i < 5; i++ { // 5 个 读 go 程
+		go readGo05(i + 1)
+	}
+	for i := 0; i < 5; i++ { //
+		go writeGo05(i + 1)
+	}
+	for {
+
+	}
+}
+
+
+
+
+用channel实现读写锁
+
+
+
+func producer(out chan<- int, idx int) {
+	for i := 0; i < 50; i++ {
+		num := rand.Intn(800)
+		fmt.Printf("生产者%dth，生产：%d\n", idx, num)
+		out <- num
+	}
+	close(out)
+}
+
+func consumer(in <-chan int, idx int) {
+	for num := range in {
+		fmt.Printf("-----消费者%dth，消费：%d\n", idx, num)
+	}
+}
+
+func main() {
+	product := make(chan int)
+	rand.Seed(time.Now().UnixNano())
+
+	for i := 0; i < 5; i++ {
+		go producer(product, i+1) // 1 生产者
+	}
+	for i := 0; i < 5; i++ {
+		go consumer(product, i+1) // 3 个消费者
+	}
+	for {
+
+	}
+}
+//// channel无缓存的时候，消费应该按顺序，但实际不是这样。如果多个go程争cpu时间,之间会有延迟。 因此加锁是有必要的（使用条件变量）。
+
+
+```
+
+```go
+条件变量， 本身不是锁！！！ 但经常与锁结合使用！！
+读写锁配合channel实现 生产消费环节
+
+读时共享，写时独占。写锁优先级比读锁高。
+var cond sync.Cond // 定义全局条件变量
+
+func producer08(out chan<- int, idx int) {
+	for {
+		// 先加锁
+		cond.L.Lock()
+		// 判断缓冲区是否满
+		for len(out) == 5 { //写成if不行，因为会if结束后向后执行，写不进去，会被阻塞
+			cond.Wait() // 1. 2. 3，4号.生产者一起来，一起抢锁，2号拿到之后，锁被阻塞，满了调wait函数，释放锁， 唤醒1,3,4. 3号被唤醒，还在if函数中，但不能再写入了，会被阻塞，阻塞后无法通知消费者进行消费，所以程序就完全被锁住了。。
+		} //使用for之后，因为全都被唤醒过了，而且缓冲区还是满的，就会release锁，然后消费者就去消费了。
+		num := rand.Intn(800)
+		out <- num
+		fmt.Printf("生产者%dth，生产：%d\n", idx, num)
+		// 访问公共区结束，并且打印结束，解锁
+		cond.L.Unlock()
+		// 唤醒阻塞在条件变量上的 消费者
+		cond.Signal()
+		time.Sleep(time.Millisecond * 200)
+	}
+}
+
+func consumer08(in <-chan int, idx int) {
+	for {
+		// 先加锁
+		cond.L.Lock()
+		// 判断 缓冲区是否为空
+		for len(in) == 0 { //写成if不行，因为会if结束后向后执行，读不了，会被阻塞
+			cond.Wait()
+		}
+		num := <-in
+		fmt.Printf("-----消费者%dth，消费：%d\n", idx, num)
+		// 访问公共区结束后，解锁
+		cond.L.Unlock()
+		// 唤醒 阻塞在条件变量上的 生产者
+		cond.Signal()
+		time.Sleep(time.Millisecond * 200)
+	}
+}
+
+func main() {
+	product := make(chan int, 5)
+	rand.Seed(time.Now().UnixNano())
+
+	quit := make(chan bool)
+
+	// 指定条件变量 使用的锁
+	cond.L = new(sync.Mutex) // 创建一个互斥锁 初值 0 ， 未加锁状态
+
+	for i := 0; i < 5; i++ {
+		go producer08(product, i+1) // 1 生产者
+	}
+	for i := 0; i < 5; i++ {
+		go consumer08(product, i+1) // 3 个消费者
+	}
+	/*	for {
+		runtime.GC()
+	}*/
+	<-quit
+
+}
+
+
+```
+
+读写锁
+
+![读写锁](Golang整理.assets/读写锁.png)
+
+互斥锁
+
+![互斥锁](Golang整理.assets/互斥锁.png)
+
+条件变量- 生产消费环节
+
+![条件变量](Golang整理.assets/条件变量.png)
+
+wait 过程
+
+![wait过程](Golang整理.assets/wait过程.png)
+
+```go
+select 超时处理：
+    select 监听 time.After() 中 channel 的读事件。  如果定时时间到，系统会向该channel中写入系统当前时间。
+    select {
+            case  <-time.After(time.Second * 5)
+    	定时到达后，要处理的内容
+    }
+
+死锁： 不是锁的一种！！！是一种错误使用锁导致的现象。
+    1. 单go程自己死锁
+    channel 应该在 至少 2 个以上的 go程(主go程和 子go程)中进行通信。否则死锁！！！
+    2. go程间channel访问顺序导致死锁
+    	使用channel一端读（写）， 要保证另一端写（读）操作，同时有机会执行。否则死锁。
+
+    3. 多go程，多channel 交叉死锁
+    	Ago程，掌握M的同时，尝试拿N； Bgo程，掌握N的同时尝试拿M。
+    4. 在go语言中，尽量不要将 互斥锁、读写锁 与 channel 混用。 ——  隐性死锁。
+
+互斥锁：（互斥量）
+
+```
+
+```go
+重要！
+A 、B go程 共同访问共享数据。 由于cpu调度随机，需要对 共享数据访问顺序加以限定（同步）。
+
+创建 mutex（互斥锁），访问共享数据之前，加锁，访问结束，解锁。 在A go程加锁期间，B go程加锁会失败——阻塞。
+
+直至 A go程 解说mutex，B 从阻塞处。恢复执行。
+
+```
+
+读写锁：
+
+```go
+---在 go 语言中，不要将 互斥锁、读写锁 与 channel 混用。 —— 隐性死锁。
+GO 中的读写锁由结构体类型 sync.RWMutex 表示。此类型的方法集合中包含两对方法：
+一组是对（写）操作的锁定和解锁，简称“写锁定”和“写解锁”：
+func (*RWMutex)Lock()
+func (*RWMutex)Unlock()
+
+另一组表示对（读）操作的锁定和解锁，简称为“读锁定”与“读解锁”：
+func (*RWMutex)RLock()
+func (*RWMutex)RUlock()
+读时共享，写时独占。写锁优先级比读锁高。
+```
+
+```go
+条件变量：
+本身不是锁！！！ 但经常与锁结合使用！！
+
+   使用流程：
+
+1.  创建 条件变量： var cond    sync.Cond
+2.  指定条件变量用的 锁：  cond.L = new(sync.Mutex)
+3.  cond.L.Lock()	给公共区加锁（互斥量）
+4.  判断是否到达 阻塞条件（缓冲区满/空）	—— for 循环判断
+	for  len(ch) == cap(ch) {   cond.Wait() —— 1) 阻塞 2) 解锁 3) 加锁
+5.  访问公共区 —— 读、写数据、打印
+6.  解锁条件变量用的 锁  cond.L.Unlock()
+7.  唤醒阻塞在条件变量上的 对端。 signal()  Broadcast()
+```
