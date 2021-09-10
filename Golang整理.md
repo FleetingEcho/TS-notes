@@ -1306,3 +1306,605 @@ MMU
 结构体指针传参
 
 ![结构体指针传参](Golang整理.assets/结构体指针传参.png)
+
+##并发编程 与 goroutine
+
+```go
+
+
+1S = 1000ms
+1ms = 1000us
+1us = 1000ns
+
+并行： 借助多核 cpu 实现。 （真 并行）
+并发：
+宏观：用户体验上，程序在并行执行。
+    微观：多个计划任务，顺序执行。在飞快的切换。轮换使用 cpu 时间轮片。 		【假 并行】
+进程并发：
+程序：编译成功得到的二进制文件。 占用 磁盘空间。 死的 1 1
+
+    进程：运行起来程序。 占用系统资源。（内存）		活的	N	1
+
+进程状态：
+初始态、就绪态、运行态、挂起（阻塞）态、终止（停止）态。
+
+线程并发：
+    线程：LWP 轻量级的 进程。最小的执行单位。 —— cpu分配时间轮片的对象。
+    进程： 最小的系统资源分配单位。
+
+同步：
+协同步调。规划先后顺序。
+
+    线程同步机制：
+    	互斥锁（互斥量）：	建议锁。 拿到锁以后，才能访问数据，没有拿到锁的线程，阻塞等待。等到拿锁的线程释放锁。
+
+    	读写锁：一把锁（读属性、写属性）。 写独占，读共享。 写锁优先级高。
+提高程序执行的效率。
+
+总结：
+进程、线程、协程 都可以完成并发。
+    进程 稳定性强
+    线程 节省资源
+    协程 效率高。
+
+创建 Goroutine 程
+    创建于进程中。 直接使用 go 关键，放置于 函数调用前面，产生一个 go程。 并发。
+
+Goroutine 的特性：【重点】!!!!
+主 go 程结束，子 go 程随之退出。
+
+runtime.Gosched()：
+    出让当前go程所占用的 cpu时间片。当再次获得cpu时，从出让位置恢复往下执行。
+    —— 时间片轮转调度算法。
+
+runtime.Goexit()：
+    return：	返回当前函数调用到调用者那里去。 return之前的 defer 注册生效。
+    Goexit():   结束调用该函数的当前go程。Goexit():之前注册的 defer都生效。
+
+runtime.GOMAXPROCS():
+		设置当前 进程使用的最大cpu核数。
+
+	n = runtime.GOMAXPROCS(2)  //将cpu设置为 双核
+n := runtime.GOMAXPROCS(0) //将cpu设置为 单核，肯定就只能顺序执行了，go声明也得按照顺序来执行
+
+
+返回 上一次调用成功的设置值。 首次调用返回默认值。
+
+【补充知识点】：
+
+    每当有一个进程启动时，系统会自动打开三个文件： 标准输入、标准输出、标准错误。 —— 对应三个文件： stdin、stdout、stderr
+
+stdin 键盘鼠标输入
+stdout 屏幕输出
+stderr 屏幕错误
+当进行运行结束。操作系统自动关闭三个文件。
+
+channel：
+是一种数据类型。 对应一个“管道”（通道 FIFO）
+
+    channel的定义：
+    	make (chan  在channel中传递的数据类型， 容量)	容量= 0： 无缓冲channel， 容量 > 0 ：有缓冲channel
+    	e.g.：无缓冲 make（chan int） 或 make （chan string , 0）
+
+    channel有两个端：
+    	一端：写端（传入端）    chan <-
+    	另一端： 读端（传出端）<- chan
+    	要求：读端和写端必须同时满足条件，才在channel上进行数据流动。否则，则阻塞。
+```
+
+并行
+
+![并行](Golang整理.assets/并行.png)
+
+进程与线程
+
+![进程和线程](Golang整理.assets/进程和线程.png)
+
+线程并发访问共享内存
+
+![线程并发访问共享资源](Golang整理.assets/线程并发访问共享资源.png)
+
+go 程并发
+
+![go程并发](Golang整理.assets/go程并发.jpg)
+
+```go
+练习
+
+统计置顶目录中love的个数
+
+// 从一个文件中逐行读取内容，统计该文件共有多少个 love
+func readFile(fileName string) int  {
+	fp, err := os.Open(fileName)
+	if err !=nil{
+		fmt.Println("Open err：", err)
+		return -1
+	}
+	defer fp.Close()
+
+	row := bufio.NewReader(fp)	// 创建一个reader
+	var total int = 0			// 统计 Love 总数的变量
+
+	for {	// 循环 按行读取文件内容，存入buf中
+		buf, err :=row.ReadBytes('\n')
+		if err != nil && err == io.EOF {
+			break
+		}
+		// 交给 wordCount 统计每行中 love 出现的次数。累加各行 love 数
+		total += wordCount(string(buf[:]))
+	}
+	return total
+}
+
+// 从一行字符串中获取 love 出现的次数。将该次数返回。
+func wordCount(s string) int {
+	arr := strings.Fields(s)			// 分割字符串,存入字符数组
+	m := make(map[string]int)			// 创建map
+
+	// 对arr中的每个单词进行循环，存入map中，统计
+	for i:= 0; i<len(arr); i++ {
+		m[arr[i]]++
+	}
+	// 统计 map 中一共有多少个 "Love"
+	for k, v := range m {
+		if k == "love" {
+			fmt.Printf("%s : %d\n", k, v)
+			return m[k]			// 返回 Love 出现的次数
+		}
+	}
+	return 0		// 没有Love， 返回 0
+}
+
+func main()  {
+/*	// 测试从文件读一行
+	oneFilenum := readFile("C:/itcast/test2/test.txt")
+	fmt.Printf("一个文件中有：%d 个Love\n", oneFilenum)
+
+	writeString
+*/
+
+	fmt.Println("请输入要找寻的目录：")
+	var path string
+	fmt.Scan(&path)						// 获取用户指定的目录名
+
+	dir, _ := os.OpenFile(path, os.O_RDONLY, os.ModeDir)	// 只读打开该目录
+	defer dir.Close()
+
+	names, _ := dir.Readdir(-1)		// 读取当前目录下所有的文件名和目录名，存入names切片
+
+	var AllLove int = 0
+	for _, name := range names {		// 遍历切片，获取文件/目录名
+		if !name.IsDir() {
+			s := name.Name()			// 文件名不包含路径。
+			if strings.HasSuffix(s,".txt") {
+				AllLove += readFile(path + s)		// 拼接有路径的文件名（绝对路径）
+			}
+		}
+	}
+	fmt.Printf("目录所有文件中共有 %d 个Love\n", AllLove)
+}
+
+
+```
+
+```go
+Gossched, Goexit使用
+func test() {
+	defer fmt.Println("C") //目的是为了进程结束的时候进行资源回收
+	// return//打印出 C B A
+	runtime.Goexit() // 退出当前go程。 只会打印出C A
+	defer fmt.Println("D")
+}
+
+func main() {
+
+	go func() {
+		defer fmt.Println("A")
+		test()
+		fmt.Println("B") // test退出了，所以不会被打印
+	}()
+	for {
+
+	} //C A
+}
+
+
+```
+
+```go
+go程通信与 channel
+定义 channel：make（chan 类型，容量）
+
+    ch :=  make （chan string）:
+
+    写端：	 ch <- "hehe"	。写端写数据，读端不在读(不在线)。写端阻塞
+
+    读端：	str := <- ch	。读端读数据， 同时写端不在写(不在线)，读端阻塞。
+
+channel 同步，数据传递：
+
+    写端：	 ch <- "hehe"	。写端写数据，读端不在读。阻塞
+
+    读端：	str := <- ch	。读端读数据， 同时写端不在写，读端阻塞。
+
+    len(ch) ： channel 中剩余未读取数据个数。 cap（ch）： 通道的容量。
+
+无缓冲 channel： —— 同步通信
+
+    创建： ch := make(chan int)  或 make(chan int, 0)
+
+    通道容量为0， len = 0 。 不能存储数据。
+
+    channel 应用于 两个go程中。	一个读，另一个写。  完成数据的单向流动
+
+    具备同步的能力。  读、写同步。（打电话）
+
+有缓冲 channel：—— 异步通信
+
+    创建： ch := make(chan int, 5)
+
+    通道容量为非0。len(ch) ： channel 中剩余未读取数据个数。 cap（ch）： 通道的容量。
+
+    channel 应用于 两个go程中。一个读，另一个写。
+
+    缓冲区可以进行数据存储。存储至 容量上限，阻塞。 具备 异步 能力，不需同时操作channel缓冲区（发短信）
+
+关闭 channel： 无、有缓冲
+确定不再相对端发送、接收数据。关闭 channel。 使用 close(ch) 关闭 channel
+对端可以判断 channel 是否关闭：
+
+    	if num， ok := <-ch ;  ok == true {
+
+    	如果对端已经关闭， ok --> false . num无数据。
+
+    	如果对端没有关闭， ok --> true . num保存读到的数据。
+
+    可以使用 range 替代 ok：
+
+    	for num := range ch {		// ch 不能替换为 <-ch
+    	}
+
+    总结：	1. 数据不发送完，不应该关闭。
+
+    	2. 已经关闭的channel， 不能再向其写数据。 报错：panic: send on closed channel
+
+    	3. 写端已经关闭channel， 可以从中读取数据。
+
+    				读无缓冲channel： 读到0 。 —— 说明：写端关闭。
+
+    				读有缓冲channel： 如果缓冲区内有数据，先读数据。读完数据后，可以继续读。 读到 0时候就可以认定为关闭了
+
+单向 channel：
+
+    默认的channel 是双向的。 var ch chan int		ch = make(chan int)
+
+    单向写channel:	var  sendCh chan <-	 int 或者	sendCh = make(chan <- int)	不能读操作
+
+    单向读channel:	var  readCh  <- chan int	或者 readCh = make(<-chan int)
+
+    转换：
+    	1. 双向channel 可以 隐式转换为 任意一种单向channel
+
+    		sendCh  = ch
+
+    	2. 单向 channel 不能转换为 双向 channel
+
+    		ch = sendCh/recvCh   error！！！
+
+    传参： 传【引用】
+
+生产者消费者模型：
+
+    生产者： 发送数据端
+
+    消费者： 接收数据端
+
+    缓冲区： 	1. 解耦 （ 降低生产者 和 消费者之间 耦合度 ）
+
+    	       2. 并发 （生产者消费者数量不对等时，能保持正常通信）
+
+    	       3. 缓存 （生产者和消费者 数据处理速度不一致时， 暂存数据）
+
+    模型代码实现。---- 模拟订单代码实现。 参阅讲义
+
+定时器：
+
+    Timer：创建定时器，指定定时时长，定时到达后。 系统会自动向定时器的成员 C 写 系统当前时间。 （对 chan 的写操作）
+
+    type Timer struct {
+    C <-chan Time
+    r runtimeTimer
+    }
+    sleep()
+    NewTimer
+    After
+
+    读取 Timer.C 得到 定时后的系统时间。并且完成一次  chan 的 读操作。
+
+    time.After() 定时：
+
+    	指定定时时长，定时到达后。 系统会自动向定时器的成员 写入 系统当前时间。
+
+    	返回 可读 chan 。 读取，可获得系统写入时间。
+
+    总结： Sleep、NewTimer、After —— time包
+
+    定时器的 停止、重置：
+
+    	1） 创建定时器 myTimer := time.NewTimer(2 * time.Second)
+
+    	2)   停止： myTimer.Stop	—— 将定时器归零。    <-myTimer.C 会阻塞
+
+    	3） 重置：myTimer.Reset(time.Second)
+
+周期定时：
+
+        type Ticker struct {
+    C <-chan Time
+    r runtimeTimer
+        }
+    1） 创建周期定时器 myTicker := time.NewTicker(time.Second)
+
+    	定时时长到达后，系统会自动向 Ticker 的 C 中写入 系统当前时间。
+
+    	并且，每隔一个定时时长后，循环写入 系统当前时间。
+
+    2） 在 子 go 程中循环读取 C。获取系统写入的时间。
+
+select：
+作用： 用来监听 channel 上的数据流动方向。 读？写？
+
+    用法： 参考 switch case 语句。 但！case后面必须是IO操作，不可以任意写判别表达式。
+
+    注意事项：
+    	1. 监听的case中，没有满足监听条件，阻塞。
+
+    	2. 监听的case中，有多个满足监听条件，任选一个执行。
+
+    	3. 可以使用default来处理所有case都不满足监听条件的状况。 通常不用（会产生忙轮询）
+
+    	4. select 自身不带有循环机制，需借助外层 for 来循环监听
+
+    	5. break 只能跳出 select中的一个case选项 。类似于switch中的用法。但并不会终止外层for循环。
+
+select 实现 fibonacci 数列：
+
+    1  1  2  3  5  8  13  21  34  55   89
+    x = y
+    y = x+y
+
+
+```
+
+```go
+channel
+	ch := make(chan int) //无缓冲
+	ch := make(chan int, 5) // 存满5个元素之前，不会阻塞
+	go func() {
+		for i := 0; i < 5; i++ {
+			fmt.Println("子go程， i=", i)
+			ch <- i // ch <- 0， 得等有地方读channel后才能继续下一轮循环， 但主go程一直在sleep，sleep完成后main已经可以打印num值了，所以主go程先显示
+		}
+	}()
+	// 争夺cpu时间是随机的。可以用Time.sleep加以控制
+	//time.Sleep(time.Second * 2)
+	for i := 0; i < 5; i++ {
+		num := <-ch
+		fmt.Println("主go程读：", num)
+	}
+/*
+不加time.sleep
+子go程， i= 0
+子go程， i= 1
+主go程读： 0
+主go程读： 1
+子go程， i= 2
+子go程， i= 3
+主go程读： 2
+主go程读： 3
+子go程， i= 4
+主go程读： 4
+*/
+因为IO操作是有延迟的，所以打印不一定会按照顺序显示。 IO耗时严重(访问硬件)
+
+```
+
+```go
+关闭channel
+	close(ch) // 写端，写完数据主动关闭channel
+
+
+	ch := make(chan int)
+
+	go func() {
+		for i := 0; i < 8; i++ {
+			ch <- i
+		}
+		close(ch) // 写端，写完数据主动关闭channel
+		//ch <- 790
+	}()
+
+	for {
+		if num, ok := <-ch; ok == true {
+			fmt.Println("读到数据：", num)
+		} else {
+			n := <-ch
+			fmt.Println("关闭后：", n) //已关闭，读出来就是0
+			break
+		}
+	}
+
+```
+
+```go
+Go channel详解
+https://colobu.com/2016/04/14/Golang-Channels/
+
+
+
+双向channel
+	ch := make(chan int) // 双向channel
+	var sendCh chan<- int = ch //写channel
+	sendCh <- 789
+
+	var readCh <-chan int = ch //读channel
+	num := <-readCh
+
+```
+
+```go
+模拟订单
+
+type OrderInfo struct { // 创建结构体类型OrderInfo，只有一个id 成员
+	id int
+}
+
+func producer2(out chan<- OrderInfo) { // 生成订单——生产者
+	for i := 0; i < 10; i++ { // 循环生成10份订单
+		order := OrderInfo{id: i + 1}
+		out <- order // 写入channel
+	}
+	close(out) // 写完，关闭channel
+}
+
+func consumer2(in <-chan OrderInfo) { // 处理订单——消费者
+
+	for order := range in { // 从channel 取出订单
+		fmt.Println("订单id为：", order.id) // 模拟处理订单
+	}
+}
+
+func main() {
+	ch := make(chan OrderInfo) // 定义一个双向 channel， 指定数据类型为OrderInfo,同步执行
+	go producer2(ch)           // 建新协程，传只写channel
+	consumer2(ch)              // 主协程，传只读channel
+}
+
+
+```
+
+```go
+操作定时器
+
+time.Sleep(time.Second) //sleep一秒
+
+
+3种定时器方法
+
+// 1 . sleep
+time.Sleep(time.Second)
+
+// 2. Timer.C
+myTimer := time.NewTimer(time.Second * 2) // 创建定时器， 指定定时时长
+nowTime := <-myTimer.C                    // 定时满，系统自动写入系统时间
+fmt.Println("更新后时间：", nowTime)//必须读取或打印channel的值，不读的话会一致阻塞
+
+// 3 time.After
+fmt.Println("当前时间：", time.Now())
+nowTime2 := <-time.After(time.Second * 2) //直接返回一个channel
+fmt.Println("更新后时间：", nowTime2)
+
+
+```
+
+```go
+周期定时
+
+func main() {
+
+	quit := make(chan bool) // 创建一个判断是否 终止的channel
+
+	fmt.Println("now:    ", time.Now())
+	myTicker := time.NewTicker(time.Second) // 定义一个周期定时器
+
+	i := 0
+	go func() {
+		for {
+			nowTime := <-myTicker.C //每隔一段时间系统会重写值，会被重新调用
+			i++
+			fmt.Println("nowTime:", nowTime)
+			if i == 3 {
+				quit <- true // 解除 主go程阻塞。
+				break        // break或者 return 或者 runtime.Goexit 都可以退出当前go程
+			}
+		}
+	}()
+
+	<-quit // 子go程 循环获取 <-myTicker.C 期间，一直阻塞
+}
+
+/*
+now:     2021-07-17 11:42:19.9260293 -0400 EDT m=+0.002109001
+nowTime: 2021-07-17 11:42:20.9464828 -0400 EDT m=+1.022562501
+nowTime: 2021-07-17 11:42:21.9420892 -0400 EDT m=+2.018168901
+nowTime: 2021-07-17 11:42:22.9502165 -0400 EDT m=+3.026296201
+
+*/
+
+
+```
+
+```go
+select 基本使用
+
+//  select有比较多的限制，其中最大的一条限制就是每个case语句里必须是一个IO操作
+func main() {
+	ch := make(chan int)    // 用来进行数据通信的 channel
+	quit := make(chan bool) // 用来判断是否退出的 channel
+	//ch2 := make(chan string)
+	go func() { // 写数据
+		for i := 0; i < 5; i++ {
+			ch <- i
+			time.Sleep(time.Second)
+		}
+		close(ch)
+		quit <- true     // 通知主go程 退出
+		runtime.Goexit() //此处直接exit或者return
+	}()
+	for { // 主go程 select 监听 chan数据流动
+		select {
+		case num := <-ch: // 不可读，阻塞。可以读，将数据保存至num
+			fmt.Println("读到：", num) // 模拟使用数据
+
+		case <-quit: // 不可读，阻塞。可以读，将主go程结束。
+			break // break 不能跳出 select
+			//runtime.Goexit()	// 终止 主 go 程		不可用
+			//return 				// 终止进程
+		}
+		fmt.Println("============") // select 自身不带有循环机制，需借助外层 for 来循环监听
+	}
+}
+
+```
+
+```go
+select实现fibonacci数组
+
+func fibonacci(ch <-chan int, quit <-chan bool) {
+	for {
+		select {
+		case num := <-ch:
+			fmt.Print(num, " ")
+		case <-quit:
+			//return
+			runtime.Goexit() //等效于 return
+		}
+	}
+}
+
+func main() {
+	ch := make(chan int)
+	quit := make(chan bool)
+
+	go fibonacci(ch, quit) // 子go 程 打印fibonacci数列
+
+	x, y := 1, 1
+	for i := 0; i < 20; i++ {
+		ch <- x
+		x, y = y, x+y
+	}
+	quit <- true
+}
+
+
+```
