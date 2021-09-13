@@ -2224,3 +2224,130 @@ t1 这个结构体值变量本身则调用值方法或者指针方法都是可�
 ```
 
 ==最后如果实在还是不知道该使用哪种接收器，那么记住使用指针接收器是最靠谱的。==
+
+### 匿名类型的方法提升
+
+当一个匿名类型被嵌入在结构体中时，匿名类型的可见方法也同样被内嵌，这在效果上等同于外层类型继承了这些方法：将父类型放在子类型中来实现亚型。这个机制提供了一种简单的方式来模拟经典面向对象语言中的子类和继承相关的效果。
+
+```go
+当我们嵌入一个匿名类型，这个类型的方法就变成了外部类型的方法，但是当它的方法被调用时，方法的接收器是内部类型(嵌入的匿名类型)，而非外部类型。
+
+
+type People struct {
+	Age    int
+	gender string
+	Name   string
+}
+
+type OtherPeople struct {
+	People //嵌入类型的方法提升,可直接调用
+}
+
+func (p People) PeInfo() {
+	fmt.Println("People ", p.Name, ": ", p.Age, "岁, 性别:", p.gender)
+}
+因此嵌入类型的名字充当着字段名，同时嵌入类型作为内部类型存在，我们可以使用下面的调用方法： OtherPeople.People.PeInfo()
+
+这儿我们可以通过类型名称来访问内部类型的字段和方法。然而，这些字段和方法也同样被提升到了外部类型，我们可以直接访问 OtherPeople.PeInfo()
+
+```
+
+### 在 Go 语言中匿名嵌入类型方法集提升的规则：
+
+```go
+给定一个结构体类型 S 和一个命名为 T 的类型，方法提升像下面规定的这样被包含在结构体方法集中：
+
+1.如果S包含嵌入字段T，则S和*S的方法集都包括具有接收器T的提升方法。*S的方法集还包括具有接收器*T的提升方法。
+
+2.如果S包含嵌入字段*T，则S和*S的方法集都包括具有接收器T或*T的提升方法
+```
+
+==当嵌入一个类型，嵌入类型的接收器为指针的方法将不能被外部类型的值访问。这跟接口规则一致。==
+
+```go
+
+type People struct {
+	Age    int
+	gender string
+	Name   string
+}
+
+type OtherPeople struct {
+	People
+}
+//*OtherPeople 下有两个方法PeInfo(),PeName(string)可以调用，
+//而OtherPeople只有一个方法PeInfo()可以调用,但语法糖让它可以都调用。
+
+type NewPeople People
+
+func (p *NewPeople) PeName(pname string) {
+	fmt.Println("pold name:", p.Name)
+	p.Name = pname
+	fmt.Println("pnew name:", p.Name)
+}
+
+func (p NewPeople) PeInfo() {
+	fmt.Println("NewPeople ", p.Name, ": ", p.Age, "岁, 性别:", p.gender)
+}
+
+func (p *People) PeName(pname string) {
+	fmt.Println("old name:", p.Name)
+	p.Name = pname
+	fmt.Println("new name:", p.Name)
+}
+
+func (p People) PeInfo() {
+	fmt.Println("People ", p.Name, ": ", p.Age, "岁, 性别:", p.gender)
+}
+
+func methodSet(a interface{}) {
+	t := reflect.TypeOf(a)
+	fmt.Printf("%T\n", a)
+	for i, n := 0, t.NumMethod(); i < n; i++ {
+		m := t.Method(i)
+		fmt.Println(i, ":", m.Name, m.Type)
+	}
+}
+
+func main() {
+	p := OtherPeople{People{26, "Male", "张三"}}
+	p.PeInfo()
+	p.PeName("Joke")
+
+	methodSet(p) // T方法提升,语法糖
+
+	methodSet(&p) // *T和T方法提升,语法糖
+
+	pp := NewPeople{42, "Male", "李四"}
+	pp.PeInfo()
+	pp.PeName("Haw")
+
+	methodSet(&pp)
+}
+
+
+// 程序输出：
+// People  张三 :  26 岁, 性别: Male
+// old name: 张三
+// new name: Joke
+// main.OtherPeople
+// 0 : PeInfo func(main.OtherPeople)
+// *main.OtherPeople
+// 0 : PeInfo func(*main.OtherPeople)
+// 1 : PeName func(*main.OtherPeople, string)
+// NewPeople  李四 :  42 岁, 性别: Male
+// pold name: 李四
+// pnew name: Haw
+// *main.NewPeople
+// 0 : PeInfo func(*main.NewPeople)
+// 1 : PeName func(*main.NewPeople, string)
+
+
+
+	p.PeInfo()
+	p.PeName("Joke")
+
+虽然P 只有一个方法：PeInfo func(main.OtherPeople)，但我们依然可以调用p.PeName("Joke")。
+
+这里Go自动转为(&p).PeName("Joke")，其调用后结果让我们以为p有两个方法，其实这里p只有一个方法。
+```
