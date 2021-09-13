@@ -1850,3 +1850,377 @@ type ReaderWriter struct {
 ```
 
 ## 第二十章 方法
+
+### 方法的定义
+
+```go
+在 Go 语言中，结构体就像是类的一种简化形式
+方法是一种特殊类型的函数，方法只是比函数多了一个接收器（receiver），当然在接口中定义的函数我们也称为方法（因为最终还是要通过绑定到类型来实现）。
+
+在方法名之前，func 关键字之后的括号中指定接收器 receiver。
+type A struct {
+	Face int
+}
+
+func (a A) f() { //f()就是 A 的方法，(a A)表示接收器
+//a 是 A的实例，f()是它的方法名
+//方法调用遵循传统的 object.name 即选择器符号：a.f()。
+	fmt.Println("hi ", a.Face)
+}
+
+Receiver
+
+1.接收器类型除了不能是指针类型(非结构体)或接口类型外，可以是其他任何类型，不仅仅是结构体类型，也可以是函数类型，还可以是 int、bool、string 等等为基础的自定义类型。
+
+2.接收器不能是一个 interface 类型，因为接口是一个抽象定义，但是方法却是具体实现；如果这样做会引发一个编译错误：invalid receiver type…。
+
+3.接收器不能是一个指针类型，但是它可以是任何其他允许类型的指针。
+
+
+
+第三点讲解:
+type MyInt int
+
+type Q *MyInt  //单纯的指针
+
+func (q Q) print() { // invalid receiver type Q (Q is a pointer type)
+	fmt.Println("Q:", q)
+}
+=========================
+
+type MyInt int //类型的指针
+
+func (mi *MyInt) print() { // 指针接收器，指针方法
+	fmt.Println("MyInt:", *mi)
+}
+func (mi MyInt) echo() { // 值接收器，值方法
+	fmt.Println("MyInt:", mi)
+}
+func main() {
+	i := MyInt(9)
+	i.print()
+}
+
+如果有类型T，方法的接收器为(t T)时我们称为值接收器，该方法称为值方法；
+方法的接收器为(t *T)时我们称为指针接收器，该方法称为指针方法。
+
+类型 T（或 *T）上的所有方法的集合叫做类型 T（或 *T）的方法集。
+```
+
+> 关于接收器的命名
+
+社区约定的接收器命名是类型的一个或两个字母的缩写(像 c 或者 cl 对于 Client)。不要使用泛指的名字像是 me，this 或者 self，也不要使用过度描述的名字，简短即可。
+
+**方法表达式与方法值**
+
+在 Go 语言中，方法调用的方式如下：如有类型 X 的变量 x，m()是其方法，则方法有效调用方式是 x.m()，如果 x 是指针变量，则 x.m()实际上是(&x).m()的简写。所以我们看到指针方法的调用写成 x.m()，这其实是一种语法糖。
+
+### Go 语言的选择器 selector
+
+```go
+x.f
+上面代码表示如果x不是包名，则表示是x（或* x）的f（字段或方法）。标识符f（字段或方法）称为选择器(selector)，选择器不能是空白标识符。选择器表达式的类型是f的类型。
+
+
+在Go语言中，我们认为方法的显式接收器(explicit receiver)x是方法x.m()的等效函数X.m()的第一个参数，所以x.m()和X.m(x)是等价的，下面我们看看具体例子：
+
+
+
+type T struct {
+	a int
+}
+
+func (tv T) Mv(a int) int {
+	fmt.Printf("Mv的值是: %d\n", a)
+	return a
+} // 值方法
+
+func (tp *T) Mp(f float32) float32 {
+	fmt.Printf("Mp: %f\n", f)
+	return f
+} // 指针方法
+
+func main() {
+	var t T
+	// 下面几种调用方法是等价的
+	t.Mv(1)    // 一般调用
+	T.Mv(t, 1) // 显式接收器t可以当做为函数的第一个参数
+
+    f0 := t.Mv // 通过选择器（selector）t.Mv将方法值赋值给一个变量 f0
+	f0(2)
+
+//这个函数值的第一个参数必须是一个接收器：
+	T.Mv(t, 3)
+	(T).Mv(t, 4)
+	f1 := T.Mv // 利用方法表达式(Method Expression) T.Mv 取到函数值
+	f1(t, 5)
+	f2 := (T).Mv // 利用方法表达式(Method Expression) T.Mv 取到函数值
+	f2(t, 6)
+}
+
+
+t.Mv(1)和T.Mv(t, 1)效果是一致的，这里显式接收器t可以当做为等效函数T.Mv()的第一个参数。而在Go语言中，我们可以利用选择器，将方法值(Method Value)取到，并可以将其赋值给其它变量。使用 t.Mv，就可以得到 Mv 方法的方法值，而且这个方法值绑定到了显式接收器（实参）t。
+
+
+在Go语言中不允许方法重载，因为方法是函数，所以对于一个类型只能有唯一一个特定名称的方法。但是如果基于接收器类型，我们可以通过一种变通的方法，达到这个目的：具有同样名字的方法可以在 2 个或多个不同的接收器类型上存在，比如在同一个包里这么做是允许的：
+
+type MyInt1 int
+type MyInt2 int
+
+func (a *MyInt1) Add(b int) int { return 0 }
+func (a *MyInt2) Add(b int) int { return 0 }
+
+```
+
+### 自定义类型方法与匿名嵌入
+
+```go
+类型和作用在它上面定义的方法必须在同一个包里定义，所以基础类型int、float 等上不能直接定义。
+
+type MyInt int
+
+func (m MyInt) print() { // 值方法
+	fmt.Println("MyInt:", m)
+}
+
+在类型别名情况下方法是保留的，但自定义的新类型方法是需要重新定义的，原方法不保留。
+
+type MyInt int
+type NewInt = MyInt //一个符号“=”去掉使得NewInt 变为新类型，会报程序错误：
+//Ni.print undefined (type NewInt has no field or method print)
+// 因为Ni 属于新的自定义类型 NewInt, 它没有定义print()方法，需要另外定义这个方法。
+func (m MyInt) print() { // 值方法
+	fmt.Println("MyInt:", m)
+}
+
+func main() {
+	myi := MyInt(99)
+	myi.print()
+
+	Ni := NewInt(myi)
+	Ni.print()
+}
+
+// 程序输出：
+// MyInt: 99
+// MyInt: 99
+
+
+若有嵌套，调用方法
+	stud.String()
+	stud.Human.String()
+
+
+```
+
+### 函数和方法的区别
+
+```go
+方法相对于函数多了接收器，这是他们之间最大的区别。
+
+函数是直接调用，而方法是作用在接收器上，方法需要类型的实例来调用。方法接收器必须有一个显式的名字，这个名字必须在方法中被使用。
+
+在接收器是指针时，方法可以改变接收器的值（或状态），这点函数也可以做到（当参数作为指针传递，即通过引用调用时，函数也可以改变参数的状态）。
+
+Go中，方法没有和定义的数据类型（结构体）混在一起，方法和数据是正交，而且数据和行为（方法）是相对独立的。
+```
+
+### 指针方法与值方法
+
+```go
+有类型T，方法的接收器为(t T)时我们称为值接收器，该方法称为值方法；方法的接收器为(t *T)时我们称为指针接收器，该方法称为指针方法。
+
+如果想要方法改变接收器的数据，就在接收器的指针上定义该方法；否则，就在普通的值类型上定义方法。这是指针方法和值方法最大的区别。
+
+由于调用 t1.M1() 时相当于T.M1(t1)，实参和形参都是类型 T。此时在M1()中的t只是t1的值拷贝，所以M1()的修改影响不到t1。
+
+同上， t1.M2() => M2(t1)，这是将 T 类型传给了 *T 类型，Go会取 t1 的地址传进去：M2(&t1)，所以M2()的修改可以影响 t1 。
+
+
+
+T 类型的变量可以调用M1()和M2()这两个方法。
+
+
+因为对于类型 T，如果在 *T 上存在方法 M2()，并且 t 是这个类型的变量，那么 t.M2() 会被自动转换为 (&t).M2()。
+
+
+type T struct {
+	Name string
+}
+
+func (t T) M1() {
+	t.Name = "name1"
+}
+
+func (t *T) M2() {
+	t.Name = "name2"
+}
+func main() {
+
+	t2 := &T{"t2"}
+
+	fmt.Println("M1调用前：", t2.Name)
+	t2.M1()
+	fmt.Println("M1调用后：", t2.Name)
+
+	fmt.Println("M2调用前：", t2.Name)
+	t2.M2()
+	fmt.Println("M2调用后：", t2.Name)
+
+}
+
+
+
+// 程序输出：
+// M1调用前： t2
+// M1调用后： t2
+// M2调用前： t2
+// M2调用后： name2
+
+
+t2.M1() => M1(t2)，t2 是指针类型，取t2的值并拷贝一份传给M1()。
+
+t2.M2() => M2(t2)，都是指针类型，不需要转换。
+
+*T 类型的变量也可以调用M1()和M2()这两个方法。
+
+
+从上面调用我们可以得知：无论你声明方法的接收器是指针接收器还是值接收器，Go都可以帮你隐式转换为正确的方法使用。
+
+但我们需要记住，值变量只拥有值方法集，而指针变量则同时拥有值方法集和指针方法集。
+
+
+
+```
+
+==值变量只拥有值方法集，而指针变量则同时拥有值方法集和指针方法集==
+==接口变量上的指针方法与值方法==
+
+无论是 T 类型变量还是\*T 类型变量，都可调用值方法或指针方法。，那么 interface 变量呢？
+
+规则一：如果使用指针方法来实现一个 interface ，那么只有指向那个类型的指针才能够实现对应的 interface。
+规则二：如果使用值方法来实现一个 interface，那么那个类型的值和指针都能够实现对应的 interface
+
+```go
+
+type T struct {
+	Name string
+}
+type Intf interface {
+	M1()
+	M2()
+}
+
+func (t T) M1() {
+	t.Name = "name1"
+}
+
+func (t *T) M2() {
+	t.Name = "name2"
+}
+func main() {
+
+	var t1 T = T{"t1"}
+	t1.M1()
+	t1.M2()
+
+	var t2 Intf = &t1 //必须是指针类型才能被认定实现了interface所有方法，仅值是不行的，因为M2是指针类型才能调用的。
+	t2.M1()
+	t2.M2()
+}
+
+
+接口类型的变量（实现了该接口的类型变量）调用方法时，我们需要注意方法的接收器，是不是真正实现了接口。
+```
+
+```go
+
+type T struct {
+	Name string
+}
+type Intf interface {
+	M1()
+	M2()
+}
+
+func (t T) M1() {
+	t.Name = "name1"
+	fmt.Println("M1")
+}
+
+func (t *T) M2() {
+	t.Name = "name2"
+	fmt.Println("M2")
+}
+func main() {
+
+	var t1 T = T{"t1"}
+
+	// interface{}(t1) 先转为空接口，再使用接口断言
+	_, ok1 := interface{}(t1).(Intf)
+	fmt.Println("t1 => Intf", ok1) //false
+
+	_, ok2 := interface{}(t1).(T)
+	fmt.Println("t1 => T", ok2) //true
+
+	_, ok3 := interface{}(t1).(*T)
+	fmt.Println("t1 => *T", ok3) //*T false
+
+	_, ok4 := interface{}(&t1).(Intf)
+	fmt.Println("&t1 => Intf", ok4)// Intf true 指针可以
+
+	_, ok5 := interface{}(&t1).(T)
+	fmt.Println("&t1 => T", ok5) //T false
+
+	_, ok6 := interface{}(&t1).(*T)
+	fmt.Println("&t1 => *T", ok6) // *T true 指针类型
+
+    t1.M1()
+	t1.M2()
+}
+
+
+// 程序输出：
+// t1 => Intf false
+// t1 => T true
+// M1
+// M2
+// t1 => *T false
+// M1
+// M2
+// &t1 => Intf true
+// M1
+// M2
+// &t1 => T false
+// &t1 => *T true
+// M1
+// M2
+
+
+执行结果表明，t1 没有实现Intf方法集，不是Intf接口类型；而&t1 则实现了Intf方法集，是Intf接口类型，可以调用相应方法。
+
+t1 这个结构体值变量本身则调用值方法或者指针方法都是可以的，这是因为语法糖存在的原因。
+
+```
+
+何时使用值类型?
+
+```go
+（1）如果接收器是一个 map，func 或者 chan，使用值类型（因为它们本身就是引用类型）。
+（2）如果接收器是一个 slice，并且方法不执行 reslice 操作，也不重新分配内存给 slice，使用值类型。
+（3）如果接收器是一个小的数组或者原生的值类型结构体类型(比如 time.Time 类型)，而且没有可修改的字段和指针，又或者接收器是一个简单地基本类型像是 int 和 string，使用值类型就好了。
+
+值类型的接收器可以减少一定数量的内存垃圾生成，值类型接收器一般会在栈上分配到内存（但也不一定），在没搞明白代码想干什么之前，别为这个原因而选择值类型接收器。
+```
+
+何时使用指针类型?
+
+```go
+（1）如果方法需要修改接收器里的数据，则接收器必须是指针类型。
+（2）如果接收器是一个包含了 sync.Mutex 或者类似同步字段的结构体，接收器必须是指针，这样可以避免拷贝。
+（3）如果接收器是一个大的结构体或者数组，那么指针类型接收器更有效率。
+（4）如果接收器是一个结构体，数组或者 slice，它们中任意一个元素是指针类型而且可能被修改，建议使用指针类型接收器，这样会增加程序的可读性。
+
+```
+
+==最后如果实在还是不知道该使用哪种接收器，那么记住使用指针接收器是最靠谱的。==
