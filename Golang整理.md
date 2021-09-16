@@ -1,4 +1,4 @@
-Golang 整理
+# Golang 整理
 
 ```go
 待查询
@@ -13,7 +13,7 @@ Golang 整理
 
 ![08内存模型图](Golang整理.assets/08内存模型图.png)
 
-fmt 打印格式
+## fmt 打印格式
 
 ```go
 %v 打印数据本身的值，
@@ -158,7 +158,7 @@ b:=0123//八进制数据 以0开头的数据是八进制
 c:=0xabc//十六进制  以0x开头的数据是十六进制
 ```
 
-func
+## func
 
 ```go
 不定参函数 函数参数类型为 ...数据类型
@@ -249,7 +249,7 @@ func main() {
 }
 ```
 
-###数组的定义和使用
+## 数组的定义和使用
 
 ```go
 计算长度
@@ -412,8 +412,12 @@ p=new(int)//new 创建好的空间值为数据类型的指针
 
 ```
 
+## 多级指针
+
+
+
 ```go
-多级指针
+
 
 a:=10
 p:=&a
@@ -428,8 +432,12 @@ fmt.Println(***p3)
 
 ```
 
+
+
+## Golang 面向对象
+
 ```go
-Golang 面向对象
+
 type person struct {
 	name string
 	age int
@@ -581,8 +589,10 @@ func main() {
 
 ```
 
+### 计算器的简单实现
+
 ```go
-计算器的简单实现
+
 
 
 type Father struct {
@@ -664,8 +674,14 @@ v:=123
 	}
 ```
 
+
+
+## 错误处理
+
+
+
 ```go
-错误处理
+
 
 errors.New("custom error message")
 可以在程序中直接调用panic 调用后程序会终止执行
@@ -1307,7 +1323,11 @@ MMU
 
 ![结构体指针传参](Golang整理.assets/结构体指针传参.png)
 
-##并发编程 与 goroutine
+## 并发编程 与 goroutine
+
+
+
+![image-20210916102244421](Golang整理.assets/image-20210916102244421.png)
 
 ```go
 
