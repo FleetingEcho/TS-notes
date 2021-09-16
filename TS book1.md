@@ -1384,7 +1384,7 @@ typeof 类型守卫
 
 -   undefined , object(Null 类型也是 object) , boolean, number , string , bigint, symbol, function , object(数组和 object 都属于 object 类型)
 
-![image-20210818121057315](TS notes.assets/image-20210818121057315.png)
+![image-20210818121057315](TS book1.assets/image-20210818121057315.png)
 
 ```tsx
 function f(x: number[] | undefined | null) {
@@ -1447,7 +1447,7 @@ function f(x: A | B) {
 
 -   布尔值转换
 
-![image-20210818122058987](TS notes.assets/image-20210818122058987.png)
+![image-20210818122058987](TS book1.assets/image-20210818122058987.png)
 
 ```tsx
 function f(x: true | false | 0 | 0n | '' | undefined | null) {
@@ -2837,7 +2837,7 @@ tsc *.ts  匹配当前目录下的所有TypeScript文件
 
 编译选项
 
-![image-20210819110144720](TS notes.assets/image-20210819110144720.png)
+![image-20210819110144720](TS book1.assets/image-20210819110144720.png)
 
 ```tsx
 tsc --emitBOM true  //该编译选项设置了编译器在生成输出文件时是否插入byte order mark（BOM）
