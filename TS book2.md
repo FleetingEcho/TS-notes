@@ -11,10 +11,6 @@
 索引签名  [key:T]:U 句法就是索引签名， T的类型只能是number / string
 ```
 
-<<<<<<< HEAD
-![image-20210821175736344](C:\Users\dev2j\AppData\Roaming\Typora\typora-user-images\image-20210821175736344.png)
-=======
-
 
 
 
@@ -59,7 +55,7 @@ function temp(msg:string,...args:number[]):number{
 function fancyDate(this: Date){return ${ this. getDate()}/${ this. getMonth()}/${ this. getFullYear()}
 ```
 
-<<<<<<< HEAD
+
 =======
 
 
@@ -131,7 +127,7 @@ type Log= (message: string, userId?: string) => void
 
 
 
-Type的两种写法
+## Type的两种写法
 
 ```tsx
 Type的两种写法
@@ -232,7 +228,7 @@ type: Type
 
 
 
-第五章,类和接口
+## 第五章,类和接口
 
 
 
